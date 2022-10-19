@@ -83,6 +83,11 @@ def cvalue(a):
 def cvalue_list(a):
     return [cvalue(item) for item in a]
 
+def sync_file(ind):
+    cmd = 'scp -r /root/vmm_control test%d:/root/' % ind
+    exec_cmd(cmd)
+    print(get_res())
+
 class color:
     black = '\033[0;30m'
     red = '\033[0;31m'
@@ -285,10 +290,10 @@ class VMM:
     records = []
     p = ''
     #benchs = ['splash2x.water_nsquared', 'splash2x.water_spatial', 'splash2x.raytrace', 'splash2x.ocean_cp', 'NPB.CG', 'NPB.FT', 'NPB.SP', 'splash2x.ocean_ncp', 'splash2x.fmm', 'parsec.swaptions', 'NPB.EP', 'parsec.canneal', 'parsec.freqmine']
-    benchs = ['splash2x.water_nsquared', 'splash2x.water_spatial', 'splash2x.raytrace', 'splash2x.ocean_cp', 'splash2x.ocean_ncp', 'splash2x.fmm', 'parsec.swaptions', 'parsec.canneal', 'parsec.freqmine']
+    #benchs = ['splash2x.water_nsquared', 'splash2x.water_spatial', 'splash2x.raytrace', 'splash2x.ocean_cp', 'splash2x.ocean_ncp', 'splash2x.fmm', 'parsec.swaptions', 'parsec.canneal', 'parsec.freqmine']
     #benchs = ['mysql']
     #benchs = ['memcached']
-    #benchs = ['img-dnn', 'masstree', 'moses', 'silo', 'specjbb', 'xapian']
+    benchs = ['img-dnn', 'masstree', 'moses', 'silo', 'specjbb', 'xapian']
     #begin_qps, end_qps, interval_qps, reqs, warmupreqs
     ranges = [[250, 5000, 250, 10000, 5000], [1000, 15000, 1000, 3000, 14000], [5, 100, 5, 500, 500], [1000, 15000, 1000, 20000, 20000], [1000, 19000, 1000, 25000, 25000], [100, 1500, 100, 3000, 1000]]
     max_qps = [1250, 5000, 10, 10000, 19000, 400]
@@ -314,6 +319,8 @@ class VMM:
     N_FREQ = 0 #number of frequency metrics
     params = []
     mode = ''
+    metric_set_mode = False
+    metric_get_mode = False
 
     def __init__(self):
         cmd = 'cat /proc/cpuinfo | grep processor | wc -l'
@@ -494,13 +501,13 @@ class VMM:
             self.records.append([])
 
     def connect_client(self):
-        debug = True
+        debug = False
         self.records = [[]] * self.num_vms
         for vm in self.vms:
             self.records[vm.vm_id] = []
             if not debug:
                 self.force_cmd(vm.vm_id)
-                time.sleep(1) #important
+                time.sleep(3) #important
             else:
                 self.vms[vm.vm_id].set_port(12345)
             vm.connect()
@@ -512,22 +519,25 @@ class VMM:
         for vm_id in range(0, self.num_vms):
             self.vms[vm_id].client_close()
 
-    def preprocess(self):
+    def preprocess(self, task_name = None):
         time.sleep(1)
         for vm in self.vms:
             self.bench_id = vm.bench_id
             vm_id = vm.vm_id
-            self.set_cores(vm.vm_id, vm.num_cores, vm.begin_core)
+            if self.metric_set_mode:
+                self.set_cores(vm.vm_id, vm.num_cores, vm.begin_core)
 
-            rdt = RDT()
-            rdt.set_llc_range(self, vm_id, vm.llc_ways_beg, vm.llc_ways_end)
-            rdt.set_mb(self, vm_id, vm.memb)
+                rdt = RDT()
+                rdt.set_llc_range(self, vm_id, vm.llc_ways_beg, vm.llc_ways_end)
+                rdt.set_mb(self, vm_id, vm.memb)
 
             if self.mode == 'num_cores' or self.mode == 'begin_cores':
                 vm.client.send('tasks:0,num_cores:%d,task_name:%s' % (vm.num_cores, self.benchs[self.bench_id]))
             elif self.mode == 'super_share' or self.mode == 'share_llc' or self.mode == 'test_benchmark' or self.mode == 'llc' or self.mode == 'memb':
                 vm.client.send('limited_time:0,num_cores:%d,task_name:%s' % (vm.num_cores, self.benchs[self.bench_id]))
             elif self.mode == 'tailbench':
+                if taskname:
+                    self.bench_id = self.benchs.index(taskname)
                 vm.client.send('tasks:0,num_cores:%d,task_name:tailbench.%s,qps:%d,reqs:%d,warmupreqs:%d' % (vm.num_cores, self.benchs[self.bench_id], self.max_qps[self.bench_id], self.ranges[self.bench_id][3], self.ranges[self.bench_id][4]))
             elif self.mode == 'parsec':
                 vm.client.send('tasks:0,num_cores:%d,task_name:%s,scale:native,threads:%d,times:%d' % (vm.num_cores, self.benchs[self.bench_id], 16, 1))
@@ -535,7 +545,8 @@ class VMM:
         time.sleep(1)
         self.record = [None] * self.num_vms
         num_sample = 1
-        res = self.get_metrics(num_sample)
+        if self.metric_set_mode:
+            res = self.get_metrics(num_sample)
         for vm in self.vms:
             vm_id = vm.vm_id
             self.record[vm_id] = []
@@ -547,9 +558,13 @@ class VMM:
             self.record[vm_id].append(vm.llc_ways_beg)
             self.record[vm_id].append(vm.llc_ways_end)
             self.record[vm_id].append(vm.memb)
-            res_vm = self.vm_metrics(vm_id, num_sample, res)
-            for r_vm in res_vm:
-                self.record[vm_id].append(r_vm)
+            if self.metric_get_mode:
+                res_vm = self.vm_metrics(vm_id, num_sample, res)
+                for r_vm in res_vm:
+                    self.record[vm_id].append(r_vm)
+            else:
+                for r_vm in [0, 0, 0, 0, 0, 0, 0]:
+                    self.record[vm_id].append(r_vm)
 
     def postprocess(self, data):
         data_dir = 'records'
@@ -769,11 +784,9 @@ class VMM:
             self.vms[1].llc_ways_beg = random.randint(0, 9) #because 10 can not be used isolatedly
             self.vms[1].llc_ways_end = random.randint(self.vms[1].llc_ways_beg + 1, VMM.LLC_MAX)
 
-    def run_benchmark(self):
+    def run_benchmark(self, task_name = None):
         cmd = [None] * self.num_vms
         data = [None] * self.num_vms
-        num_cores = 0 
-        begin_core = 0
 
         for vm in self.vms:
             vm.send('begin:0')
@@ -781,12 +794,96 @@ class VMM:
             for vm_id in range(0, self.num_vms):
                 (cmd[vm_id], data[vm_id]) = decode(self.vms[vm_id].recv())
             if cmd[0] == 'begin':   #Only vm 0 is the master node
-                self.preprocess()
+                self.preprocess(task_name)
             elif cmd[0] == 'res':
                 self.postprocess(data)
                 for vm_id in range(0, self.num_vms):
                     self.vms[vm_id].send('end:0')
             elif cmd[0] == 'end':
+                break
+
+    def preprocess_single(self, vm_id, task_name = None):
+        time.sleep(1)
+        vm = self.vms[vm_id]
+        self.bench_id = vm.bench_id
+        if self.metric_set_mode:
+            self.set_cores(vm.vm_id, vm.num_cores, vm.begin_core)
+
+            rdt = RDT()
+            rdt.set_llc_range(self, vm_id, vm.llc_ways_beg, vm.llc_ways_end)
+            rdt.set_mb(self, vm_id, vm.memb)
+        if self.mode == 'tailbench':
+            if task_name:
+                self.bench_id = self.benchs.index(task_name)
+            vm.client.send('tasks:0,num_cores:%d,task_name:tailbench.%s,qps:%d,reqs:%d,warmupreqs:%d' % (vm.num_cores, self.benchs[self.bench_id], self.max_qps[self.bench_id], self.ranges[self.bench_id][3], self.ranges[self.bench_id][4]))
+        elif self.mode == 'parsec':
+            if task_name:
+                vm.client.send('tasks:0,num_cores:%d,task_name:%s,scale:native,threads:%d,times:%d' % (vm.num_cores, task_name, 16, 1))
+            else:
+                vm.client.send('tasks:0,num_cores:%d,task_name:%s,scale:native,threads:%d,times:%d' % (vm.num_cores, self.benchs[self.bench_id], 16, 1))
+
+        time.sleep(1)
+        if vm_id == 0:
+            self.record = [None] * self.num_vms
+        num_sample = 1
+        if self.metric_set_mode:
+            res = self.get_metrics(num_sample)
+        self.record[vm_id] = []
+        self.record[vm_id].append(vm_id)
+        self.record[vm_id].append(vm.bench_id)
+        self.record[vm_id].append(self.benchs[vm.bench_id])
+        self.record[vm_id].append(vm.begin_core)
+        self.record[vm_id].append(vm.num_cores)
+        self.record[vm_id].append(vm.llc_ways_beg)
+        self.record[vm_id].append(vm.llc_ways_end)
+        self.record[vm_id].append(vm.memb)
+        if self.metric_get_mode:
+            res_vm = self.vm_metrics(vm_id, num_sample, res)
+            for r_vm in res_vm:
+                self.record[vm_id].append(r_vm)
+        else:
+            for r_vm in [0, 0, 0, 0, 0, 0, 0]:
+                self.record[vm_id].append(r_vm)
+
+    def postprocess_single(self, vm_id, data):
+        data_dir = 'records'
+        vm = self.vms[vm_id]
+        vm.data = data['res']
+
+        vm_id = vm.vm_id
+        data = float(vm.data)
+        vm.print('avg_perf: %f' % data)
+        self.record[vm_id].append(data)
+
+        exp = Exp(self, self.record[vm_id])
+        exp.print_title(vm_id)
+        exp.print(vm_id)
+
+        res = self.record[vm_id]
+        self.records[vm_id].append(res)
+        f = open('%s/%03d_%03d_%03d_%s.log' % (data_dir, vm_id, self.run_index, vm.bench_id, self.benchs[vm.bench_id]), 'wb')
+        pickle.dump(self.records[vm_id], f)
+        f.close()
+        if vm_id == 0:
+            VMM.visited = [False] * VMM.N_CORE
+            self.maps_vm_core = bidict()
+
+    def run_benchmark_single(self, vm_id, once = False, task_name = None, skip_header = False):
+        cmd = None
+        data = None
+        vm = self.vms[vm_id]
+        if not skip_header:
+            vm.send('begin:0')
+        while True:
+            (cmd, data) = decode(vm.recv())
+            if cmd == 'begin':   #Only vm 0 is the master node
+                self.preprocess_single(vm_id, task_name)
+            elif cmd == 'res':
+                self.postprocess_single(vm_id, data)
+                vm.send('end:0')
+            elif cmd == 'end':
+                break
+            if once:
                 break
 
     def pre_test_benchmark(self):
@@ -933,7 +1030,9 @@ class VMM:
         vm.set_port(port)
         cmd = "ssh root@%s 'pkill test_server'" % (vm.ip)
         p = exec_cmd(cmd, vm_id = vm_id)
-        cmd = "ssh root@%s 'cd /root/tailbench/tailbench-v0.9 && ./test_server.py run %d' &> %s.log" % (vm.ip, port, vm.vm_name)
+        #cmd = "ssh root@%s 'cd /root/tailbench/tailbench-v0.9 && ./test_server.py run %d' &> %s.log" % (vm.ip, port, vm.vm_name)
+        pwd = os.getcwd()
+        cmd = "ssh root@%s 'cd %s && ./test_server.py run %d' &> %s.log" % (vm.ip, pwd, port, vm.vm_name)
         p = exec_cmd(cmd, 10 + vm_id, False, vm_id = vm_id)
         #vm.print(get_res(vm_id))
         self.p = p
@@ -1441,8 +1540,8 @@ if __name__ == "__main__":
         #vmm.init_mode('memb')
         #vmm.init_mode('share_llc')
         #vmm.init_mode('super_share')
-        #vmm.init_mode('tailbench')
-        vmm.init_mode('parsec')
+        vmm.init_mode('tailbench')
+        #vmm.init_mode('parsec')
 
         vmm.init_benchmark()
         print('vmm.num_vms = ', vmm.num_vms)
@@ -1518,5 +1617,8 @@ if __name__ == "__main__":
         #stdin, stdout, stderr = ssh.exec_command('cd /root/vm_control/control_exp && ./test_server.py run 12345')
         #print(stdout.read())
         #print(stderr.read())
+    elif param == 'sync_file':
+        option == sys.argv[2]
+        sync_file(option)
     else:
         print("param error")

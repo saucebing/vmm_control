@@ -11,6 +11,7 @@ from scipy.stats import norm
 from scipy.optimize import minimize
 import sklearn.gaussian_process as gp
 from test_server import *
+from control_vm import *
 
 # Number of LC apps available
 TOT_LC_APPS   = 5
@@ -236,45 +237,82 @@ class Lat(object):
     def parseSojournTimes(self):
         return self.reqTimes[:, 2]
 
-def runLCBenchPre(ind, k):
-    os.system('pkill -9 test_server')
-    os.system('pkill -9 %s' % (APP_NAMES[ind]))
-    p1 = run_tailbench_parallel_pre(10 + ind, APP_NAMES[ind], max_qps[ind] * perc_qps[k], ranges[ind][3], ranges[ind][4], 1)
-    exec_cmd('ps aux | grep %s' % (APP_NAMES[ind]))
-    pid = 0
-    for line in split_str(get_res(), '\n'):
-        if not 'grep' in line and not 'defunct' in line:
-            print(line)
-            pid = int(list(split_str(line))[1])
-            print('pid = ', pid)
-    #os.system('kill -STOP %s' % pid)
-    return (p1, pid)
+vmm = None
+first_flag = True
 
-def runLCBenchPost(ind, k, p1 = None):
+def runLCBenchPre(platform, ind, k):
+    if platform == 'host':
+        os.system('pkill -9 test_server')
+        os.system('pkill -9 %s' % (APP_NAMES[ind]))
+        p1 = run_tailbench_parallel_pre(10 + ind, APP_NAMES[ind], max_qps[ind] * perc_qps[k], ranges[ind][3], ranges[ind][4], 1)
+        exec_cmd('ps aux | grep %s' % (APP_NAMES[ind]))
+        pid = 0
+        for line in split_str(get_res(), '\n'):
+            if not 'grep' in line and not 'defunct' in line:
+                print(line)
+                pid = int(list(split_str(line))[1])
+                print('pid = ', pid)
+        #os.system('kill -STOP %s' % pid)
+        return (p1, pid)
+    elif platform == 'guest':
+        global vmm
+        global first_flag
+        if first_flag:
+            vmm = VMM()
+            num_vms = NUM_APPS
+            for vm_id in range(0, num_vms):
+                vm_name = 'centos8_test%d' % vm_id
+                vmm.new_vm(vm_id, vm_name)
+            vmm.connect_client()
+            vmm.init_mode('tailbench')
+            vmm.init_benchmark()
+            first_flag = False
+        vmm.init_mode('tailbench')
+        vmm.run_benchmark_single(k, once = True, task_name = LC_APPS[k])
+        return (None, vmm.vms[k].get_pid())
+
+def runLCBenchPost(platform, ind, k, p1 = None):
     #os.system('kill -CONT %s' % pid)
-    if p1:
-        p1.wait()
-    p95 = run_tailbench_parallel_post(10 + ind, APP_NAMES[ind], max_qps[ind] * perc_qps[k], ranges[ind][3], ranges[ind][4], 1)
+    p95 = 1e6
+    if platform == 'host':
+        if p1:
+            p1.wait()
+        p95 = run_tailbench_parallel_post(10 + ind, APP_NAMES[ind], max_qps[ind] * perc_qps[k], ranges[ind][3], ranges[ind][4], 1)
+    elif platform == 'guest':
+        vmm.run_benchmark_single(k, skip_header = True)
+        p95 = float(vmm.vms[k].data)
     return p95
 
-def runBGBenchPre(ind):
-    os.system('pkill -9 test_server')
-    os.system('pkill -9 %s' % (BG_APPS[ind].split('.')[1]))
-    p1 = run_parsec_parallel_pre(ind, BG_APPS[ind], 'native', 16, 1)
-    exec_cmd('ps aux | grep %s' % (BG_APPS[ind].split('.')[1]))
-    pid = 0
-    for line in split_str(get_res(), '\n'):
-        if not 'grep' in line and not 'defunct' in line:
-            print(line)
-            pid = int(list(split_str(line))[1])
-            print('pid = ', pid)
-    #os.system('kill -STOP %s' % pid)
+def runBGBenchPre(platform, ind):
+    p1 = None
+    pid = -1
+    if platform == 'host':
+        os.system('pkill -9 test_server')
+        os.system('pkill -9 %s' % (BG_APPS[ind].split('.')[1]))
+        p1 = run_parsec_parallel_pre(ind, BG_APPS[ind], 'native', 16, 1)
+        exec_cmd('ps aux | grep %s' % (BG_APPS[ind].split('.')[1]))
+        pid = 0
+        for line in split_str(get_res(), '\n'):
+            if not 'grep' in line and not 'defunct' in line:
+                print(line)
+                pid = int(list(split_str(line))[1])
+                print('pid = ', pid)
+    elif platform == 'guest':
+        vmm.init_mode('parsec')
+        vmm.run_benchmark_single(ind + NUM_LC_APPS, once = True, task_name = BG_APPS[ind])
+        p1 = None
+        pid = vmm.vms[ind + NUM_LC_APPS].get_pid()
     return (p1, pid)
 
-def runBGBenchPost(ind, p1 = None):
-    if p1:
-        p1.wait()
-    time = run_parsec_parallel_post(ind, BG_APPS[ind], 'native', 16, 1)
+def runBGBenchPost(platform, ind, p1 = None):
+    time = 0
+    if platform == 'host':
+        if p1:
+            p1.wait()
+        time = run_parsec_parallel_post(ind, BG_APPS[ind], 'native', 16, 1)
+    elif platform == 'guest':
+        vmm.run_benchmark_single(ind + NUM_LC_APPS, skip_header = True)
+        p95 = float(vmm.vms[ind + NUM_LC_APPS].data)
     print('Running Time: %f' % time)
 
 def getLatPct(latsFile):
@@ -316,9 +354,11 @@ def gen_initial_configs():
 
     return configs
 
+platform = 'guest'
 def get_baseline_perfs(configs):
 
     global BASE_PERFS
+    global platform
 
     for i in range(NUM_APPS):
 
@@ -356,7 +396,7 @@ def get_baseline_perfs(configs):
         procs = []
         for k in range(NUM_APPS):
             ind = APP_NAMES.index(LC_APPS[k])
-            (p1, pid) = runLCBenchPre(ind, k)
+            (p1, pid) = runLCBenchPre(platform, ind, k)
             procs.append(p1)
             APP_PIDS[k] = '%d' % (pid)
         print('new pids = ', APP_PIDS)
@@ -383,7 +423,7 @@ def get_baseline_perfs(configs):
         #cbw running apps post
         for k in range(NUM_APPS):
             ind = APP_NAMES.index(LC_APPS[k])
-            perf = runLCBenchPost(ind, k, procs[k])
+            perf = runLCBenchPost(platform, ind, k, procs[k])
             #perf = getLatPct(LATS_FILES[k])
             if k == i:
                 BASE_PERFS[k] = perf
@@ -425,6 +465,7 @@ def gen_random_config():
     return config
 
 def sample_perf(p, r_ind = -1):
+    global platform
 
     # Core allocations of each job
     app_cores = [""]*NUM_APPS
@@ -460,11 +501,11 @@ def sample_perf(p, r_ind = -1):
     for k in range(NUM_APPS):
         if k < NUM_LC_APPS:
             ind = APP_NAMES.index(LC_APPS[k])
-            (p1, pid) = runLCBenchPre(ind, k)
+            (p1, pid) = runLCBenchPre(platform, ind, k)
             lc_procs.append(p1)
         else:
             ind = k - NUM_LC_APPS
-            (p1, pid) = runBGBenchPre(ind)
+            (p1, pid) = runBGBenchPre(platform, ind)
             bg_procs.append(p1)
         APP_PIDS[k] = '%d' % (pid)
     print('new pids = ', APP_PIDS)
@@ -518,7 +559,7 @@ def sample_perf(p, r_ind = -1):
     #cbw running apps post
     for j in range(NUM_LC_APPS):
         ind = APP_NAMES.index(LC_APPS[j])
-        p95 = runLCBenchPost(ind, j, lc_procs[j])
+        p95 = runLCBenchPost(platform, ind, j, lc_procs[j])
         #p95 = getLatPct(LATS_FILES[j])
         #cbw
         if ind < NUM_LC_APPS and j == r_ind:
@@ -528,6 +569,10 @@ def sample_perf(p, r_ind = -1):
         if p95 > APP_QOSES[j]:
             qv[j] = APP_QOSES[j] / p95
             sd[j] = BASE_PERFS[j] / p95
+   
+    #cbw
+    for j in range(NUM_BG_APPS):
+        time_bg = runBGBenchPost(platform, j)
 
     # Return the final objective function score if QoS not met
     if stats.mstats.gmean(qv) != 1.0:
@@ -558,7 +603,7 @@ def sample_perf(p, r_ind = -1):
     #    sd_bg[j] = min(1.0, IPS / BASE_PERFS[j+NUM_LC_APPS])
 
     #for j in range(NUM_BG_APPS):
-    #    t = runBGBenchPost(j, bg_procs[j])
+    #    t = runBGBenchPost(platform, j, bg_procs[j])
 
     # Return the final objective function score if BG jobs are present
     return qv, 0.5*(min(1.0,stats.mstats.gmean(sd_bg))+1.0)
