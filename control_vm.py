@@ -536,7 +536,7 @@ class VMM:
             elif self.mode == 'super_share' or self.mode == 'share_llc' or self.mode == 'test_benchmark' or self.mode == 'llc' or self.mode == 'memb':
                 vm.client.send('limited_time:0,num_cores:%d,task_name:%s' % (vm.num_cores, self.benchs[self.bench_id]))
             elif self.mode == 'tailbench':
-                if taskname:
+                if task_name:
                     self.bench_id = self.benchs.index(taskname)
                 vm.client.send('tasks:0,num_cores:%d,task_name:tailbench.%s,qps:%d,reqs:%d,warmupreqs:%d' % (vm.num_cores, self.benchs[self.bench_id], self.max_qps[self.bench_id], self.ranges[self.bench_id][3], self.ranges[self.bench_id][4]))
             elif self.mode == 'parsec':

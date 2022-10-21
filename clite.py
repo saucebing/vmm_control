@@ -261,6 +261,7 @@ def runLCBenchPre(platform, ind, k):
             vmm = VMM()
             num_vms = NUM_APPS
             for vm_id in range(0, num_vms):
+                sync_file(vm_id)
                 vm_name = 'centos8_test%d' % vm_id
                 vmm.new_vm(vm_id, vm_name)
             vmm.connect_client()
@@ -773,7 +774,21 @@ def bayesian_optimization_engine(x0, alpha=1e-5):
 
     return n+1, np.max(yp)
 
+def standard_test():
+    print("=================== standard test begin ===================")
+    (p1, pid) = runLCBenchPre('guest', 0, 0)
+    p95 = runLCBenchPost('guest', 0, 0, p1)
+    standard = 1500
+    if p95 < standard:
+        print("=================== standard test passed: %f < %f ===================" % (p95, standard))
+    else:
+        print("=================== standard test failed: %f >= %f ===================" % (p95, standard))
+        sys.exit(1)
+
 def c_lite():
+
+    #cbw
+    standard_test()
     
     # Generate the bounds and constraints required for optimization
     gen_bounds_and_constraints()
