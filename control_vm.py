@@ -59,8 +59,8 @@ def find_list_2(pattern, lst):
     pat = re.compile(pattern)
     return [pat.findall(item)[0] for item in lst if pat.findall(item)]
 
-def split_str(string):
-    return list(filter(lambda x:x, string.split()))
+def split_str(string, char=' '):
+    return list(filter(lambda x:x, string.split(char)))
 
 def b2s(s):
     return str(s, encoding = 'utf-8')
