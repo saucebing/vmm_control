@@ -33,8 +33,10 @@ APP_NAMES     = [
 
 ranges = [[250, 5000, 250, 10000, 5000], [1000, 15000, 1000, 3000, 14000], [0, 0, 0, 0, 0], [1000, 19000, 1000, 25000, 25000], [100, 1500, 100, 3000, 1000]]
 #max_qps = [1250, 5000 * 0.5, 0, 19000, 400 * 2]
-max_qps = [1500, 5000, 0, 16000, 500]
-standards = [8.464, 1.921, 0, 0.537, 17.864]
+#max_qps = [1500, 5000, 0, 16000, 500] #only one guest
+#standards = [8.464, 1.921, 0, 0.537, 17.864] #only one guest
+max_qps = [1000, 6000, 0, 16000, 600] #three guests
+standards = [2570.76, 1331.651, 0, 0.537, 2586.127] #thress guests
 
 # QoS requirements of LC apps (time in seconds)
 #APP_QOSES     = {
@@ -134,7 +136,7 @@ BASE_DIR      = os.getcwd()
 #LC_APPS       = ['img-dnn', 'masstree', 'xapian']
 #perc_qps      = [0.2, 0.2, 0.2]
 LC_APPS       = ['img-dnn', 'masstree']
-perc_qps      = [0.2, 0.2]
+perc_qps      = [1.0, 1.0]
 
 # Path to the latency files of applications
 LATS_FILES = [BASE_DIR + '/%s/lats.bin' % lc_app for lc_app in LC_APPS]
@@ -241,6 +243,7 @@ vmm = None
 first_flag = True
 
 def runLCBenchPre(platform, ind, k):
+    print('ind = %d, k = %d, max_qps[ind] = %f, perc_qps[k] = %f' % (ind, k, max_qps[ind], perc_qps[k]))
     if platform == 'host':
         os.system('pkill -9 test_server')
         os.system('pkill -9 %s' % (APP_NAMES[ind]))
@@ -409,11 +412,16 @@ def get_baseline_perfs(configs):
             cos_cat_set2 = COS_CAT_SET2 % (str(j+1), app_cores[j])
             cos_mBG_set1 = COS_MBG_SET1 % (str(j+1), app_membw[j])
             cos_mBG_set2 = COS_MBG_SET2 % (str(j+1), app_cores[j])
-            sp.check_output(shlex.split(taskset_cmnd), stderr=FNULL)
-            sp.check_output(shlex.split(cos_cat_set1), stderr=FNULL)
-            sp.check_output(shlex.split(cos_cat_set2), stderr=FNULL)
-            sp.check_output(shlex.split(cos_mBG_set1), stderr=FNULL)
-            sp.check_output(shlex.split(cos_mBG_set2), stderr=FNULL)
+            #sp.check_output(shlex.split(taskset_cmnd), stderr=FNULL)
+            #sp.check_output(shlex.split(cos_cat_set1), stderr=FNULL)
+            #sp.check_output(shlex.split(cos_cat_set2), stderr=FNULL)
+            #sp.check_output(shlex.split(cos_mBG_set1), stderr=FNULL)
+            #sp.check_output(shlex.split(cos_mBG_set2), stderr=FNULL)
+            exec_cmd(taskset_cmnd)
+            exec_cmd(cos_cat_set1)
+            exec_cmd(cos_cat_set2)
+            exec_cmd(cos_mBG_set1)
+            exec_cmd(cos_mBG_set2)
 
         if i >= NUM_LC_APPS:
             # Reset the IPS counters
@@ -518,11 +526,16 @@ def sample_perf(p, r_ind = -1):
         cos_cat_set2 = COS_CAT_SET2 % (str(j+1), app_cores[j])
         cos_mBG_set1 = COS_MBG_SET1 % (str(j+1), app_membw[j])
         cos_mBG_set2 = COS_MBG_SET2 % (str(j+1), app_cores[j])
-        sp.check_output(shlex.split(taskset_cmnd), stderr=FNULL)
-        sp.check_output(shlex.split(cos_cat_set1), stderr=FNULL)
-        sp.check_output(shlex.split(cos_cat_set2), stderr=FNULL)
-        sp.check_output(shlex.split(cos_mBG_set1), stderr=FNULL)
-        sp.check_output(shlex.split(cos_mBG_set2), stderr=FNULL)
+        #sp.check_output(shlex.split(taskset_cmnd), stderr=FNULL)
+        #sp.check_output(shlex.split(cos_cat_set1), stderr=FNULL)
+        #sp.check_output(shlex.split(cos_cat_set2), stderr=FNULL)
+        #sp.check_output(shlex.split(cos_mBG_set1), stderr=FNULL)
+        #sp.check_output(shlex.split(cos_mBG_set2), stderr=FNULL)
+        exec_cmd(taskset_cmnd)
+        exec_cmd(cos_cat_set1)
+        exec_cmd(cos_cat_set2)
+        exec_cmd(cos_mBG_set1)
+        exec_cmd(cos_mBG_set2)
 
     if NUM_BG_APPS != 0:
         # Reset the IPS counters
@@ -777,8 +790,13 @@ def bayesian_optimization_engine(x0, alpha=1e-5):
 def standard_test():
     print("=================== standard test begin ===================")
     (p1, pid) = runLCBenchPre('guest', 0, 0)
+    #clean
+    taskset_cmnd = TASKSET + "0-9,20-29 " + str(pid)
+    exec_cmd(taskset_cmnd)
+    exec_cmd("pqos -R")
+
     p95 = runLCBenchPost('guest', 0, 0, p1)
-    standard = 1500
+    standard = 6000
     if p95 < standard:
         print("=================== standard test passed: %f < %f ===================" % (p95, standard))
     else:
