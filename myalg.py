@@ -238,14 +238,16 @@ class Lat(object):
     def parseSojournTimes(self):
         return self.reqTimes[:, 2]
 
-vmm = None
+vmm = VMM()
 first_flag = True
 
 def runLCBenchPre(platform, ind, k):
+    global vmm
+    print('ind = %d, k = %d, max_qps[ind] = %f, perc_qps[ind] = %f' % (ind, k, vmm.max_qps[ind], vmm.perc_qps[ind]))
     if platform == 'host':
         os.system('pkill -9 test_server')
         os.system('pkill -9 %s' % (APP_NAMES[ind]))
-        p1 = run_tailbench_parallel_pre(10 + ind, APP_NAMES[ind], max_qps[ind] * perc_qps[k], ranges[ind][3], ranges[ind][4], 1)
+        p1 = run_tailbench_parallel_pre(10 + ind, APP_NAMES[ind], vmm.max_qps[ind] * vmm.perc_qps[ind], ranges[ind][3], ranges[ind][4], 1)
         exec_cmd('ps aux | grep %s' % (APP_NAMES[ind]))
         pid = 0
         for line in split_str(get_res(), '\n'):
@@ -256,10 +258,8 @@ def runLCBenchPre(platform, ind, k):
         #os.system('kill -STOP %s' % pid)
         return (p1, pid)
     elif platform == 'guest':
-        global vmm
         global first_flag
         if first_flag:
-            vmm = VMM()
             num_vms = NUM_APPS
             for vm_id in range(0, num_vms):
                 sync_file(vm_id)
@@ -279,7 +279,7 @@ def runLCBenchPost(platform, ind, k, p1 = None):
     if platform == 'host':
         if p1:
             p1.wait()
-        p95 = run_tailbench_parallel_post(10 + ind, APP_NAMES[ind], max_qps[ind] * perc_qps[k], ranges[ind][3], ranges[ind][4], 1)
+        p95 = run_tailbench_parallel_post(10 + ind, APP_NAMES[ind], vmm.max_qps[ind] * vmm.perc_qps[ind], ranges[ind][3], ranges[ind][4], 1)
     elif platform == 'guest':
         vmm.run_benchmark_single(k, skip_header = True)
         p95 = float(vmm.vms[k].data)

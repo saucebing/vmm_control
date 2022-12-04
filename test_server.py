@@ -304,6 +304,7 @@ if __name__ == '__main__':
         #for bench_id in range(6, len(benchs)):
         #    run_parsec_parallel('4 %s' % benchs[bench_id], parsec_scale, parsec_times, 1)
     elif param == 'test_2':
+        tailbench_dir = '/root/tars/tailbench-v0.9'
         benchs = ['img-dnn', 'masstree', 'moses', 'silo', 'specjbb', 'xapian']
         ranges = [[250, 5000, 250, 10000, 5000], [1000, 15000, 1000, 3000, 14000], [5, 100, 5, 500, 500], [1000, 15000, 1000, 20000, 20000], [1000, 21000, 1000, 25000, 25000], [100, 1500, 100, 3000, 1000]]
         for ind in range(0, len(benchs)):
@@ -313,12 +314,12 @@ if __name__ == '__main__':
             for QPS in range(ran[0], ran[1], ran[2]):
                 print('bench = %s, QPS = %d, REQS = %d, WARMUPREQS = %d' % (bench, QPS, ran[3], ran[4]))
                 beg_time = datetime.now()
-                os.chdir('%s' % bench)
+                os.chdir('%s/%s' % (tailbench_dir, bench))
                 exec_cmd('TBENCH_RANDSEED=1 ./myrun.sh 1 %d %d %d' % (QPS, ran[3], ran[4]))
                 print(get_res())
                 os.chdir('..')
-                getLatPct("%s/lats.bin" % bench)
-                print(get_res())
+                tl = getLatPct("%s/lats.bin" % bench)
+                print('95th percentile latency %f ms' % (tl))
                 end_time = datetime.now()
                 print('Time elapsed: %d s' % (end_time - beg_time).seconds)
                 print('==================================================')

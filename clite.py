@@ -35,7 +35,7 @@ ranges = [[250, 5000, 250, 10000, 5000], [1000, 15000, 1000, 3000, 14000], [0, 0
 #max_qps = [1250, 5000 * 0.5, 0, 19000, 400 * 2]
 #max_qps = [1500, 5000, 0, 16000, 500] #only one guest
 #standards = [8.464, 1.921, 0, 0.537, 17.864] #only one guest
-max_qps = [1000, 6000, 0, 16000, 600] #three guests
+#max_qps = [1000, 6000, 0, 16000, 600] #three guests
 standards = [2570.76, 1331.651, 0, 0.537, 2586.127] #thress guests
 
 # QoS requirements of LC apps (time in seconds)
@@ -136,7 +136,7 @@ BASE_DIR      = os.getcwd()
 #LC_APPS       = ['img-dnn', 'masstree', 'xapian']
 #perc_qps      = [0.2, 0.2, 0.2]
 LC_APPS       = ['img-dnn', 'masstree']
-perc_qps      = [1.0, 1.0]
+#perc_qps      = [1.0, 1.0]
 
 # Path to the latency files of applications
 LATS_FILES = [BASE_DIR + '/%s/lats.bin' % lc_app for lc_app in LC_APPS]
@@ -239,15 +239,16 @@ class Lat(object):
     def parseSojournTimes(self):
         return self.reqTimes[:, 2]
 
-vmm = None
+vmm = VMM()
 first_flag = True
 
 def runLCBenchPre(platform, ind, k):
-    print('ind = %d, k = %d, max_qps[ind] = %f, perc_qps[k] = %f' % (ind, k, max_qps[ind], perc_qps[k]))
+    global vmm
+    print('ind = %d, k = %d, max_qps[ind] = %f, perc_qps[ind] = %f' % (ind, k, vmm.max_qps[ind], vmm.perc_qps[ind]))
     if platform == 'host':
         os.system('pkill -9 test_server')
         os.system('pkill -9 %s' % (APP_NAMES[ind]))
-        p1 = run_tailbench_parallel_pre(10 + ind, APP_NAMES[ind], max_qps[ind] * perc_qps[k], ranges[ind][3], ranges[ind][4], 1)
+        p1 = run_tailbench_parallel_pre(10 + ind, APP_NAMES[ind], vmm.max_qps[ind] * vmm.perc_qps[ind], ranges[ind][3], ranges[ind][4], 1)
         exec_cmd('ps aux | grep %s' % (APP_NAMES[ind]))
         pid = 0
         for line in split_str(get_res(), '\n'):
@@ -258,10 +259,8 @@ def runLCBenchPre(platform, ind, k):
         #os.system('kill -STOP %s' % pid)
         return (p1, pid)
     elif platform == 'guest':
-        global vmm
         global first_flag
         if first_flag:
-            vmm = VMM()
             num_vms = NUM_APPS
             for vm_id in range(0, num_vms):
                 sync_file(vm_id)
@@ -281,7 +280,7 @@ def runLCBenchPost(platform, ind, k, p1 = None):
     if platform == 'host':
         if p1:
             p1.wait()
-        p95 = run_tailbench_parallel_post(10 + ind, APP_NAMES[ind], max_qps[ind] * perc_qps[k], ranges[ind][3], ranges[ind][4], 1)
+        p95 = run_tailbench_parallel_post(10 + ind, APP_NAMES[ind], vmm.max_qps[ind] * vmm.perc_qps[ind], ranges[ind][3], ranges[ind][4], 1)
     elif platform == 'guest':
         vmm.run_benchmark_single(k, skip_header = True)
         p95 = float(vmm.vms[k].data)
@@ -791,7 +790,7 @@ def standard_test():
     print("=================== standard test begin ===================")
     (p1, pid) = runLCBenchPre('guest', 0, 0)
     #clean
-    taskset_cmnd = TASKSET + "0-9,20-29 " + str(pid)
+    taskset_cmnd = TASKSET + "0-9,10-19 " + str(pid) #numa
     exec_cmd(taskset_cmnd)
     exec_cmd("pqos -R")
 
