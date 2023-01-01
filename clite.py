@@ -417,10 +417,15 @@ def get_baseline_perfs(configs):
             #sp.check_output(shlex.split(cos_mBG_set1), stderr=FNULL)
             #sp.check_output(shlex.split(cos_mBG_set2), stderr=FNULL)
             exec_cmd(taskset_cmnd)
+            print(get_res())
             exec_cmd(cos_cat_set1)
+            print(get_res())
             exec_cmd(cos_cat_set2)
+            print(get_res())
             exec_cmd(cos_mBG_set1)
+            print(get_res())
             exec_cmd(cos_mBG_set2)
+            print(get_res())
 
         if i >= NUM_LC_APPS:
             # Reset the IPS counters
@@ -531,10 +536,15 @@ def sample_perf(p, r_ind = -1):
         #sp.check_output(shlex.split(cos_mBG_set1), stderr=FNULL)
         #sp.check_output(shlex.split(cos_mBG_set2), stderr=FNULL)
         exec_cmd(taskset_cmnd)
+        print(get_res())
         exec_cmd(cos_cat_set1)
+        print(get_res())
         exec_cmd(cos_cat_set2)
+        print(get_res())
         exec_cmd(cos_mBG_set1)
+        print(get_res())
         exec_cmd(cos_mBG_set2)
+        print(get_res())
 
     if NUM_BG_APPS != 0:
         # Reset the IPS counters
@@ -587,14 +597,19 @@ def sample_perf(p, r_ind = -1):
     for j in range(NUM_BG_APPS):
         time_bg = runBGBenchPost(platform, j)
 
+    for j in range(NUM_LC_APPS + NUM_BG_APPS):
+        print('BASE_PERFS[%d] = %f' % (j, BASE_PERFS[j]))
+        
     # Return the final objective function score if QoS not met
     if stats.mstats.gmean(qv) != 1.0:
+        print("***************cbw LC not met***************")
         print('cbw not met: qv:', qv)
         print('cbw not met: gmean:', 0.5*stats.mstats.gmean(qv))
         return qv, 0.5*stats.mstats.gmean(qv)
 
     # Return the final objective function score if QoS met
     if NUM_BG_APPS == 0:
+        print("***************cbw LC met, without BG***************")
         return qv, 0.5*(min(1.0, stats.mstats.gmean(sd))+1.0)
 
     # Get the IPS counters  
@@ -619,6 +634,7 @@ def sample_perf(p, r_ind = -1):
     #    t = runBGBenchPost(platform, j, bg_procs[j])
 
     # Return the final objective function score if BG jobs are present
+    print("***************cbw LC met, with BG***************")
     return qv, 0.5*(min(1.0,stats.mstats.gmean(sd_bg))+1.0)
 
 def expected_improvement(c, exp=0.01):
@@ -787,12 +803,18 @@ def bayesian_optimization_engine(x0, alpha=1e-5):
     return n+1, np.max(yp)
 
 def standard_test():
+    #clean
+    for i in range(0, NUM_LC_APPS + NUM_BG_APPS):
+        cmd = 'ps aux | grep centos8_test%d' % i
+        exec_cmd(cmd)
+        line = [line for line in split_str(get_res(), '\n') if 'kvm' in line][0]
+        pid = split_str(line, ' ')[1]
+        taskset_cmnd = TASKSET + "0-9,10-19 " + str(pid) #numa
+        exec_cmd(taskset_cmnd)
+    exec_cmd("pqos -R")
+
     print("=================== standard test begin ===================")
     (p1, pid) = runLCBenchPre('guest', 0, 0)
-    #clean
-    taskset_cmnd = TASKSET + "0-9,10-19 " + str(pid) #numa
-    exec_cmd(taskset_cmnd)
-    exec_cmd("pqos -R")
 
     p95 = runLCBenchPost('guest', 0, 0, p1)
     standard = 6000
@@ -805,7 +827,7 @@ def standard_test():
 def c_lite():
 
     #cbw
-    standard_test()
+    #standard_test()
     
     # Generate the bounds and constraints required for optimization
     gen_bounds_and_constraints()

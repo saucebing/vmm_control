@@ -296,11 +296,12 @@ class VMM:
     benchs = ['img-dnn', 'masstree', 'moses', 'silo', 'specjbb', 'xapian']
     #begin_qps, end_qps, interval_qps, reqs, warmupreqs
     ranges = [[250, 5000, 250, 10000, 5000], [1000, 15000, 1000, 3000, 14000], [5, 100, 5, 500, 500], [1000, 15000, 1000, 20000, 20000], [1000, 19000, 1000, 25000, 25000], [100, 1500, 100, 3000, 1000]]
-    #max_qps = [1250, 5000, 10, 10000, 19000, 400]
-    #standards = [8.464, 1.921, 28.874, 2.442, 0.537, 17.864]
-    max_qps = [1000, 6000, 0, 16000, 600] #three guests
-    standards = [2570.76, 1331.651, 0, 0.537, 2586.127] #thress guests
-    perc_qps = [1.0, 1.0, 1.0, 1.0, 1.0]
+
+    #for clite and myalg
+    max_qps = [1500, 6000, 0, 17000, 600] #three guests
+    standards = [1917.28, 719.39, 0, 130.55, 2061.68] #thress guests
+    #perc_qps = [1.0, 1.0, 1.0, 1.0, 1.0]
+    perc_qps = [0.5, 0.5, 0.5, 0.5, 0.5]
     #benchs = ['splash2x.water_nsquared', 'splash2x.water_spatial', 'splash2x.raytrace', 'splash2x.ocean_cp', 'splash2x.ocean_ncp', 'splash2x.fmm', 'parsec.swaptions']
     #benchs = ['splash2x.water_nsquared', 'splash2x.water_spatial', 'splash2x.raytrace', 'splash2x.ocean_cp', 'splash2x.ocean_ncp', 'splash2x.fmm', 'parsec.swaptions']
     #benchs = ['parsec.canneal', 'parsec.freqmine']

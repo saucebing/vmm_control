@@ -404,6 +404,7 @@ if __name__ == '__main__':
                             ind += 1
                             serv.send('res:%f' % tl)
                         elif 'splash2x' in task_name or 'parsec' in task_name:
+                            limited_time = 10
                             #if 'ocean_ncp' in task_name:    #special deal
                             #    num_threads = 4
                             #    tasks_per_thread = int(int(n_cores) / num_threads)

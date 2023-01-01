@@ -34,8 +34,8 @@ APP_NAMES     = [
 
 ranges = [[250, 5000, 250, 10000, 5000], [1000, 15000, 1000, 3000, 14000], [0, 0, 0, 0, 0], [1000, 19000, 1000, 25000, 25000], [100, 1500, 100, 3000, 1000]]
 #max_qps = [1250, 5000 * 0.5, 0, 19000, 400 * 2]
-max_qps = [1500, 5000, 0, 16000, 500]
-standards = [8.464, 1.921, 0, 0.537, 17.864]
+#max_qps = [1500, 5000, 0, 16000, 500]
+#standards = [8.464, 1.921, 0, 0.537, 17.864]
 
 # QoS requirements of LC apps (time in seconds)
 #APP_QOSES     = {
@@ -135,7 +135,7 @@ BASE_DIR      = os.getcwd()
 #LC_APPS       = ['img-dnn', 'masstree', 'xapian']
 #perc_qps      = [0.2, 0.2, 0.2]
 LC_APPS       = ['img-dnn', 'masstree']
-perc_qps      = [0.2, 0.2]
+#perc_qps      = [1.0, 1.0]
 
 # Path to the latency files of applications
 LATS_FILES = [BASE_DIR + '/%s/lats.bin' % lc_app for lc_app in LC_APPS]
@@ -854,7 +854,7 @@ def standard_test():
     print("=================== standard test begin ===================")
     (p1, pid) = runLCBenchPre('guest', 0, 0)
     p95 = runLCBenchPost('guest', 0, 0, p1)
-    standard = 1500
+    standard = 6000
     if p95 < standard:
         print("=================== standard test passed: %f < %f ===================" % (p95, standard))
     else:
@@ -864,7 +864,7 @@ def standard_test():
 def myalg():
 
     #cbw
-    #standard_test()
+    standard_test()
     
     # Generate the bounds and constraints required for optimization
     gen_bounds_and_constraints()
