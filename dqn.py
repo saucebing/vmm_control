@@ -15,12 +15,12 @@ import numpy as np
 import gym
 
 # Hyper Parameters
-BATCH_SIZE = 32
+BATCH_SIZE = 5
 LR = 0.02                   # learning rate, origin: 0.01
 EPSILON = 0.9               # greedy policy
 GAMMA = 0.9                 # reward discount
 TARGET_REPLACE_ITER = 200   # target update frequency, origin: 100
-MEMORY_CAPACITY = 200 #origin: 2000
+MEMORY_CAPACITY = 5 #origin: 2000
 env = gym.make('MyEnv-v1')
 print('env.observation_space:', env.observation_space)
 print('env.observation_space.shape:', env.observation_space.shape)

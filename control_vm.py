@@ -301,7 +301,7 @@ class VMM:
     max_qps = [1500, 6000, 0, 17000, 600] #three guests
     standards = [1917.28, 719.39, 0, 130.55, 2061.68] #thress guests
     #perc_qps = [1.0, 1.0, 1.0, 1.0, 1.0]
-    perc_qps = [0.5, 0.5, 0.5, 0.5, 0.5]
+    perc_qps = [0.25, 0.25, 0.25, 0.25, 0.25]
     #benchs = ['splash2x.water_nsquared', 'splash2x.water_spatial', 'splash2x.raytrace', 'splash2x.ocean_cp', 'splash2x.ocean_ncp', 'splash2x.fmm', 'parsec.swaptions']
     #benchs = ['splash2x.water_nsquared', 'splash2x.water_spatial', 'splash2x.raytrace', 'splash2x.ocean_cp', 'splash2x.ocean_ncp', 'splash2x.fmm', 'parsec.swaptions']
     #benchs = ['parsec.canneal', 'parsec.freqmine']

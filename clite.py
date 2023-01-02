@@ -553,6 +553,9 @@ def sample_perf(p, r_ind = -1):
     # Wait for some cycles
     time.sleep(SLEEP_TIME)
 
+    qv = [1.0]*NUM_APPS
+    sd = [1.0]*NUM_LC_APPS
+
     sd_bg = [0.0]*NUM_BG_APPS
     if NUM_BG_APPS != 0:
         # Get the IPS counters  
@@ -574,10 +577,8 @@ def sample_perf(p, r_ind = -1):
                 BASE_PERFS[j + NUM_LC_APPS] = 1.0 #for error fix
                 
             sd_bg[j] = min(1.0, IPS / BASE_PERFS[j+NUM_LC_APPS])
+            qv[j + NUM_LC_APPS] = sd_bg[j] #added by cbw
         print('sd_bg=', sd_bg)
-
-    qv = [1.0]*NUM_LC_APPS
-    sd = [1.0]*NUM_LC_APPS
 
     #cbw running apps post
     for j in range(NUM_LC_APPS):

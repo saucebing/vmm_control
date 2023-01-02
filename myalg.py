@@ -410,11 +410,21 @@ def get_baseline_perfs(configs):
             cos_cat_set2 = COS_CAT_SET2 % (str(j+1), app_cores[j])
             cos_mBG_set1 = COS_MBG_SET1 % (str(j+1), app_membw[j])
             cos_mBG_set2 = COS_MBG_SET2 % (str(j+1), app_cores[j])
-            sp.check_output(shlex.split(taskset_cmnd), stderr=FNULL)
-            sp.check_output(shlex.split(cos_cat_set1), stderr=FNULL)
-            sp.check_output(shlex.split(cos_cat_set2), stderr=FNULL)
-            sp.check_output(shlex.split(cos_mBG_set1), stderr=FNULL)
-            sp.check_output(shlex.split(cos_mBG_set2), stderr=FNULL)
+            #sp.check_output(shlex.split(taskset_cmnd), stderr=FNULL)
+            #sp.check_output(shlex.split(cos_cat_set1), stderr=FNULL)
+            #sp.check_output(shlex.split(cos_cat_set2), stderr=FNULL)
+            #sp.check_output(shlex.split(cos_mBG_set1), stderr=FNULL)
+            #sp.check_output(shlex.split(cos_mBG_set2), stderr=FNULL)
+            exec_cmd(taskset_cmnd)
+            print(get_res())
+            exec_cmd(cos_cat_set1)
+            print(get_res())
+            exec_cmd(cos_cat_set2)
+            print(get_res())
+            exec_cmd(cos_mBG_set1)
+            print(get_res())
+            exec_cmd(cos_mBG_set2)
+            print(get_res())
 
         if i >= NUM_LC_APPS:
             # Reset the IPS counters
@@ -519,11 +529,21 @@ def sample_perf(p, r_ind = -1):
         cos_cat_set2 = COS_CAT_SET2 % (str(j+1), app_cores[j])
         cos_mBG_set1 = COS_MBG_SET1 % (str(j+1), app_membw[j])
         cos_mBG_set2 = COS_MBG_SET2 % (str(j+1), app_cores[j])
-        sp.check_output(shlex.split(taskset_cmnd), stderr=FNULL)
-        sp.check_output(shlex.split(cos_cat_set1), stderr=FNULL)
-        sp.check_output(shlex.split(cos_cat_set2), stderr=FNULL)
-        sp.check_output(shlex.split(cos_mBG_set1), stderr=FNULL)
-        sp.check_output(shlex.split(cos_mBG_set2), stderr=FNULL)
+        #sp.check_output(shlex.split(taskset_cmnd), stderr=FNULL)
+        #sp.check_output(shlex.split(cos_cat_set1), stderr=FNULL)
+        #sp.check_output(shlex.split(cos_cat_set2), stderr=FNULL)
+        #sp.check_output(shlex.split(cos_mBG_set1), stderr=FNULL)
+        #sp.check_output(shlex.split(cos_mBG_set2), stderr=FNULL)
+        exec_cmd(taskset_cmnd)
+        print(get_res())
+        exec_cmd(cos_cat_set1)
+        print(get_res())
+        exec_cmd(cos_cat_set2)
+        print(get_res())
+        exec_cmd(cos_mBG_set1)
+        print(get_res())
+        exec_cmd(cos_mBG_set2)
+        print(get_res())
 
     if NUM_BG_APPS != 0:
         # Reset the IPS counters
@@ -531,6 +551,9 @@ def sample_perf(p, r_ind = -1):
 
     # Wait for some cycles
     time.sleep(SLEEP_TIME)
+
+    qv = [1.0]*NUM_APPS
+    sd = [1.0]*NUM_LC_APPS
 
     sd_bg = [0.0]*NUM_BG_APPS
     if NUM_BG_APPS != 0:
@@ -553,10 +576,8 @@ def sample_perf(p, r_ind = -1):
                 BASE_PERFS[j + NUM_LC_APPS] = 1.0 #for error fix
                 
             sd_bg[j] = min(1.0, IPS / BASE_PERFS[j+NUM_LC_APPS])
+            qv[j + NUM_LC_APPS] = sd_bg[j] #added by cbw
         print('sd_bg=', sd_bg)
-
-    qv = [1.0]*NUM_LC_APPS
-    sd = [1.0]*NUM_LC_APPS
 
     #cbw running apps post
     for j in range(NUM_LC_APPS):
@@ -576,14 +597,19 @@ def sample_perf(p, r_ind = -1):
     for j in range(NUM_BG_APPS):
         time_bg = runBGBenchPost(platform, j)
 
+    for j in range(NUM_LC_APPS + NUM_BG_APPS):
+        print('BASE_PERFS[%d] = %f' % (j, BASE_PERFS[j]))
+        
     # Return the final objective function score if QoS not met
     if stats.mstats.gmean(qv) != 1.0:
+        print("***************cbw LC not met***************")
         print('cbw not met: qv:', qv)
         print('cbw not met: gmean:', 0.5*stats.mstats.gmean(qv))
         return qv, 0.5*stats.mstats.gmean(qv)
 
     # Return the final objective function score if QoS met
     if NUM_BG_APPS == 0:
+        print("***************cbw LC met, without BG***************")
         return qv, 0.5*(min(1.0, stats.mstats.gmean(sd))+1.0)
 
     # Get the IPS counters  
@@ -608,6 +634,7 @@ def sample_perf(p, r_ind = -1):
     #    t = runBGBenchPost(platform, j, bg_procs[j])
 
     # Return the final objective function score if BG jobs are present
+    print("***************cbw LC met, with BG***************")
     return qv, 0.5*(min(1.0,stats.mstats.gmean(sd_bg))+1.0)
 
 def expected_improvement(c, exp=0.01):
@@ -697,13 +724,22 @@ def state_to_param(state):
     return param
 
 def dqn_optimization_engine(x0, alpha=1e-5):
+    # Sample initial configurations
+    for (t_ind, params) in enumerate(x0[:3]):
+        print("=================== %sInitail configurations %03d/%03d%s ===================" % (color.beg1, t_ind, len(x0) - 1, color.end))
+        q, y = sample_perf(params, t_ind)
+        print('q, y = ', q, y)
+
     p = x0[3]
     print('first_state:', p)
     dqn = DQN()
 
     print('\nCollecting experience...')
     #for i_episode in range(400):
-    for i_episode in range(10):
+    total_episode = 10
+    break_flag = False
+    for i_episode in range(total_episode):
+        print("=================== %sDQN Iteration %03d/%03d%s ===================" % (color.beg1, i_episode, total_episode, color.end))
     #    s = env.reset()
         s = param_to_state(p)
         env.state = s
@@ -724,7 +760,8 @@ def dqn_optimization_engine(x0, alpha=1e-5):
             print('s_ = ', s_)
             p = state_to_param(s_)
             q, y = sample_perf(p, ind)
-            r = y
+            print('q, y = ', q, y)
+            r = stats.mstats.gmean(q)
 
             if r == 1.0:
                 done = True
@@ -735,6 +772,7 @@ def dqn_optimization_engine(x0, alpha=1e-5):
             print("info=", info)
 
             if done:
+                break_flag = True
                 break
     #        # modify the reward
             #x, x_dot, theta, theta_dot = s_
@@ -751,12 +789,14 @@ def dqn_optimization_engine(x0, alpha=1e-5):
                     print('Ep: ', i_episode,
                           '| Ep_r: ', round(ep_r, 2))
 
-            if done:
-                break
             s = s_
+
+        if break_flag:
+            break
+
     return (0, 0)
 
-def basyian_optimization_engine(x0, alpha=1e-5):
+def bayesian_optimization_engine(x0, alpha=1e-5):
 
     global MODEL, OPTIMAL_PERF
 
@@ -851,8 +891,19 @@ def basyian_optimization_engine(x0, alpha=1e-5):
     return n+1, np.max(yp)
 
 def standard_test():
+    #clean
+    for i in range(0, NUM_LC_APPS + NUM_BG_APPS):
+        cmd = 'ps aux | grep centos8_test%d' % i
+        exec_cmd(cmd)
+        line = [line for line in split_str(get_res(), '\n') if 'kvm' in line][0]
+        pid = split_str(line, ' ')[1]
+        taskset_cmnd = TASKSET + "0-9,10-19 " + str(pid) #numa
+        exec_cmd(taskset_cmnd)
+    exec_cmd("pqos -R")
+
     print("=================== standard test begin ===================")
     (p1, pid) = runLCBenchPre('guest', 0, 0)
+
     p95 = runLCBenchPost('guest', 0, 0, p1)
     standard = 6000
     if p95 < standard:
@@ -864,7 +915,7 @@ def standard_test():
 def myalg():
 
     #cbw
-    standard_test()
+    #standard_test()
     
     # Generate the bounds and constraints required for optimization
     gen_bounds_and_constraints()
@@ -877,7 +928,8 @@ def myalg():
     #get_baseline_perfs(init_configs)
 
     # Perform Bayesian optimization
-    num_iters, obj_value = dqn_optimization_engine(x0=init_configs)
+    num_iters, obj_value = bayesian_optimization_engine(x0=init_configs)
+    #num_iters, obj_value = dqn_optimization_engine(x0=init_configs)
 
     return num_iters, obj_value
 
