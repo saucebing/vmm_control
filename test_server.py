@@ -404,25 +404,7 @@ if __name__ == '__main__':
                             ind += 1
                             serv.send('res:%f' % tl)
                         elif 'splash2x' in task_name or 'parsec' in task_name:
-                            limited_time = 10
-                            #if 'ocean_ncp' in task_name:    #special deal
-                            #    num_threads = 4
-                            #    tasks_per_thread = int(int(n_cores) / num_threads)
-                            #    task = '%d %s' % (tasks_per_thread, task_name)
-                            #else:
-                            #    task = '4 %s' % task_name
-                            #    num_threads = int(int(n_cores) / 4)
-                            task = ''
-                            num_threads = 0
-                            if int(n_cores) == 4:
-                                task = '4 %s' % task_name
-                                num_threads = int(int(n_cores) / 4)
-                            elif int(n_cores) == 8:
-                                task = '8 %s' % task_name
-                                num_threads = int(int(n_cores) / 8)
-                            elif int(n_cores) == 16:
-                                task = '16 %s' % task_name
-                                num_threads = int(int(n_cores) / 16)
+                            limited_time = 0
                             parsec_scale = data['scale']
                             parsec_threads = int(data['threads'])
                             #avg_perf = run_parsec(task, parsec_scale)

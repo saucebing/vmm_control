@@ -2,6 +2,7 @@
 
 import os
 import time
+import math
 import shlex
 import numpy as np
 import random as rd
@@ -141,8 +142,8 @@ LC_APPS       = ['img-dnn', 'masstree']
 LATS_FILES = [BASE_DIR + '/%s/lats.bin' % lc_app for lc_app in LC_APPS]
 
 # ALl the BG jobs being runs
-#BG_APPS       = ['blackscholes']
 BG_APPS       = ['parsec.blackscholes']
+#BG_APPS       = []
 
 APPS = LC_APPS + BG_APPS
 
@@ -176,6 +177,38 @@ CONSTS        = None
 MODEL         = None
 
 OPTIMAL_PERF  = None
+
+ress = []
+resourcess = []
+
+best_tscore = 0
+best_scores = []
+best_rtime = 0
+best_part = []
+best_id = -1
+base_tscore = 0
+base_scores = []
+base_rtime = 0
+base_part = []
+base_id = -1
+cur_tscore = 0
+cur_scores = []
+cur_rtime = 0
+cur_part = []
+cur_id = -1
+res_min = []
+res_max = []
+
+def mapx(x, rid):
+    global res_min, res_max
+    miny = 0
+    maxy = 100
+    y = [0] * 3
+    k = 10
+    for i in range(0, len(x)):
+        y[i] = (math.e ** (k * (res_max[i] - x[i]) / (res_max[i] - res_min[i])) - 1) / (math.e ** k - 1) * (maxy - miny)  + miny
+    sumy = sum(y) 
+    return sumy, y, x, rid
 
 class color:
     black = '\033[0;30m'
@@ -283,6 +316,7 @@ def runLCBenchPost(platform, ind, k, p1 = None):
     elif platform == 'guest':
         vmm.run_benchmark_single(k, skip_header = True)
         p95 = float(vmm.vms[k].data)
+    print('Running time p95: %f' % p95)
     return p95
 
 def runBGBenchPre(platform, ind):
@@ -314,8 +348,9 @@ def runBGBenchPost(platform, ind, p1 = None):
         time = run_parsec_parallel_post(ind, BG_APPS[ind], 'native', 16, 1)
     elif platform == 'guest':
         vmm.run_benchmark_single(ind + NUM_LC_APPS, skip_header = True)
-        p95 = float(vmm.vms[ind + NUM_LC_APPS].data)
+        time = float(vmm.vms[ind + NUM_LC_APPS].data)
     print('Running Time: %f' % time)
+    return time
 
 def getLatPct(latsFile):
     assert os.path.exists(latsFile)
@@ -477,7 +512,14 @@ def gen_random_config():
     return config
 
 def sample_perf(p, r_ind = -1):
-    global platform
+    global platform, res_min, res_max, base_tscore, base_scores, base_rtime, base_part, base_id, cur_tscore, cur_scores, cur_rtime, cur_part, cur_id, best_tscore, best_scores, best_rtime, best_part, best_id, resources, ress
+
+    resources = []
+    for rid in range(NUM_RESOURCES):
+        resource = p[rid * (NUM_APPS - 1): (rid + 1) * (NUM_APPS - 1)].copy()
+        resource.append(NUM_UNITS[rid] - sum(resource))
+        resources.append(resource)
+    resourcess.append(resources)
 
     # Core allocations of each job
     app_cores = [""]*NUM_APPS
@@ -524,6 +566,9 @@ def sample_perf(p, r_ind = -1):
     
     # Set the allocations
     for j in range(NUM_APPS):
+        #vmm.vms[j].setvcpus_dyn(resourcess[-1][0][j])
+        #for vcpu_id in range(0, resourcess[-1][0][j]):
+        #    vmm.vms[j].bind_core(vcpu_id, app_cores[j])
         taskset_cmnd = TASKSET + app_cores[j] + " " + APP_PIDS[j]
         cos_cat_set1 = COS_CAT_SET1 % (str(j+1), app_cways[j])
         cos_cat_set2 = COS_CAT_SET2 % (str(j+1), app_cores[j])
@@ -550,10 +595,11 @@ def sample_perf(p, r_ind = -1):
         os.system(WR_MSR_COMM + MSR_PERF_FIX_CTR0 + " 0x0")
 
     # Wait for some cycles
-    time.sleep(SLEEP_TIME)
+    #time.sleep(SLEEP_TIME)
 
     qv = [1.0]*NUM_APPS
     sd = [1.0]*NUM_LC_APPS
+    res = [1.0]*NUM_APPS
 
     sd_bg = [0.0]*NUM_BG_APPS
     if NUM_BG_APPS != 0:
@@ -571,11 +617,14 @@ def sample_perf(p, r_ind = -1):
                 ind += 1
             print('IPS=', IPS)
             if j + NUM_LC_APPS == r_ind:
+                print('j + NUM_LC_APPS = %d, r_ind = %d' % (j + NUM_LC_APPS, r_ind))
                 BASE_PERFS[j + NUM_LC_APPS] = IPS
             if r_ind != -1 and r_ind < NUM_LC_APPS:
+                print('r_ind = %d, NUM_LC_APPS = %d' % (r_ind, NUM_LC_APPS))
                 BASE_PERFS[j + NUM_LC_APPS] = 1.0 #for error fix
                 
             sd_bg[j] = min(1.0, IPS / BASE_PERFS[j+NUM_LC_APPS])
+            #res[j + NUM_LC_APPS] = IPS
             qv[j + NUM_LC_APPS] = sd_bg[j] #added by cbw
         print('sd_bg=', sd_bg)
 
@@ -592,10 +641,55 @@ def sample_perf(p, r_ind = -1):
         if p95 > APP_QOSES[j]:
             qv[j] = APP_QOSES[j] / p95
             sd[j] = BASE_PERFS[j] / p95
+        res[j] = p95
    
     #cbw
     for j in range(NUM_BG_APPS):
         time_bg = runBGBenchPost(platform, j)
+        res[j + NUM_LC_APPS] = time_bg
+    ress.append(res)
+
+    if r_ind == 4:
+        np_ress = np.array(ress)
+        res_min = [min(np_ress[0:3, 0]), min(np_ress[0:3, 1]), min(np_ress[0:3, 2])]
+        res_max = [max(np_ress[0:3, 0]), max(np_ress[0:3, 1]), max(np_ress[0:3, 2])]
+        base_tscore, base_scores, base_rtime, base_id = mapx(ress[3], 3)
+        base_part = resourcess[3]
+        base_id = 3
+
+    print('%sResults:%s' % (color.beg7, color.end))
+    if r_ind >= 4:
+        for res_id in range(len(ress)):
+            cur_tscore, cur_scores, cur_rtime, cur_id = mapx(ress[res_id], res_id)
+            cur_part = resourcess[res_id]
+            if cur_tscore > best_tscore:
+                best_tscore = cur_tscore
+                best_scores = cur_scores
+                best_rtime = cur_rtime
+                best_part = cur_part
+                best_id = cur_id
+            print("%s--------------------------------------------BEG-----------------------------------------------%s" % (color.beg5, color.end))
+            print("Result ID: %d" % res_id)
+            print("RES 0: ", resourcess[res_id][0], " RES 1: ", resourcess[res_id][1], " RES 2: ", resourcess[res_id][2], sep = '')
+            print("CurScore: %.2f" % cur_tscore, ", cur: ", ['%.2f' % item for item in cur_scores], ', ', ['%.2f' % item for item in cur_rtime], ', ', cur_part, ', id: ', cur_id, sep = '')
+            print("BaseScore: %.2f" % base_tscore, ", base: ", ['%.2f' % item for item in base_scores], ', ', ['%.2f' % item for item in base_rtime], ', ', base_part, ', id: ', base_id, sep = '')
+            print("BestScore: %.2f" % best_tscore, ", best: ", ['%.2f' % item for item in best_scores], ', ', ['%.2f' % item for item in best_rtime], ', ', best_part, ', id: ', best_id, sep = '')
+            print("MinScore: %.2f" % 300, ", min: ", ['%.2f' % item for item in res_min], ', id: NULL', sep = '')
+            print("MaxScore: %.2f" % 0, ", max: ", ['%.2f' % item for item in res_max], ', id: NULL', sep = '')
+            print("%s--------------------------------------------END-----------------------------------------------%s" % (color.beg5, color.end))
+    else:
+        for res_id in range(len(ress)):
+            print("%s--------------------------------------------BEG-----------------------------------------------%s" % (color.beg5, color.end))
+            print("Result ID: %d" % res_id)
+            print("RES 0: ", resourcess[res_id][0], " RES 1: ", resourcess[res_id][1], " RES 2: ", resourcess[res_id][2], sep = '')
+            print("CurScore: NULL, cur: ", ['%.2f' % item for item in ress[res_id]], ', id: ', res_id, sep = '')
+            print("%s--------------------------------------------END-----------------------------------------------%s" % (color.beg5, color.end))
+
+    for res in ress:
+        string = []
+        for item in res:
+            string.append('%.3f' % float(item))
+        print(','.join(string))
 
     for j in range(NUM_LC_APPS + NUM_BG_APPS):
         print('BASE_PERFS[%d] = %f' % (j, BASE_PERFS[j]))
@@ -724,9 +818,10 @@ def state_to_param(state):
     return param
 
 def dqn_optimization_engine(x0, alpha=1e-5):
+    global base_tscore, cur_tscore
     # Sample initial configurations
-    for (t_ind, params) in enumerate(x0[:3]):
-        print("=================== %sInitail configurations %03d/%03d%s ===================" % (color.beg1, t_ind, len(x0) - 1, color.end))
+    for (t_ind, params) in enumerate(x0):
+        print("=================== %sInitail configurations %03d/%03d%s ===================" % (color.beg1, t_ind, len(x0), color.end))
         q, y = sample_perf(params, t_ind)
         print('q, y = ', q, y)
 
@@ -737,9 +832,9 @@ def dqn_optimization_engine(x0, alpha=1e-5):
     print('\nCollecting experience...')
     #for i_episode in range(400):
     total_episode = 10
+    total_ind = 100
     break_flag = False
     for i_episode in range(total_episode):
-        print("=================== %sDQN Iteration %03d/%03d%s ===================" % (color.beg1, i_episode, total_episode, color.end))
     #    s = env.reset()
         s = param_to_state(p)
         env.state = s
@@ -747,7 +842,9 @@ def dqn_optimization_engine(x0, alpha=1e-5):
         ep_r = 0
     #    ind = 0
     #    while True:
-        for ind in range(0, 1):
+        for ind in range(0, total_ind):
+            r_ind = i_episode * total_ind + ind + 4
+            print("=================== %sDQN Iteration (%03d, %03d)/(%03d, %03d)%s ===================" % (color.beg1, i_episode, ind, total_episode, total_ind, color.end))
     #        #env.render(mode = 'rgb_array')
             a = dqn.choose_action(s)
             print("a=", a)
@@ -759,9 +856,15 @@ def dqn_optimization_engine(x0, alpha=1e-5):
             s_, r, done, info = env.step2(a)
             print('s_ = ', s_)
             p = state_to_param(s_)
-            q, y = sample_perf(p, ind)
+            q, y = sample_perf(p, r_ind)
             print('q, y = ', q, y)
-            r = stats.mstats.gmean(q)
+            #r = stats.mstats.gmean(q) #rewrite reward
+            r = (cur_tscore - base_tscore) * 0.01 / (NUM_APPS - 1) # range is 100 to 300, so just be divided by 200
+            print("%s--------------------------------------------BEG-----------------------------------------------%s" % (color.beg2, color.end))
+            print("CurScore: %.2f" % cur_tscore)
+            print("BaseScore: %.2f" % base_tscore)
+            print('reward = ', r)
+            print("%s--------------------------------------------END-----------------------------------------------%s" % (color.beg2, color.end))
 
             if r == 1.0:
                 done = True
@@ -928,8 +1031,8 @@ def myalg():
     #get_baseline_perfs(init_configs)
 
     # Perform Bayesian optimization
-    num_iters, obj_value = bayesian_optimization_engine(x0=init_configs)
-    #num_iters, obj_value = dqn_optimization_engine(x0=init_configs)
+    #num_iters, obj_value = bayesian_optimization_engine(x0=init_configs)
+    num_iters, obj_value = dqn_optimization_engine(x0=init_configs)
 
     return num_iters, obj_value
 

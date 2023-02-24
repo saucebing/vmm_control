@@ -84,7 +84,7 @@ def cvalue_list(a):
     return [cvalue(item) for item in a]
 
 def sync_file(ind):
-    cmd = 'scp -r /root/vmm_control test%d:/root/' % ind
+    cmd = 'scp -r /root/vmm_control test%s:/root/' % ind
     exec_cmd(cmd)
     print(get_res())
 
@@ -301,7 +301,7 @@ class VMM:
     max_qps = [1500, 6000, 0, 17000, 600] #three guests
     standards = [1917.28, 719.39, 0, 130.55, 2061.68] #thress guests
     #perc_qps = [1.0, 1.0, 1.0, 1.0, 1.0]
-    perc_qps = [0.25, 0.25, 0.25, 0.25, 0.25]
+    perc_qps = [0.5, 0.5, 0.5, 0.5, 0.5]
     #benchs = ['splash2x.water_nsquared', 'splash2x.water_spatial', 'splash2x.raytrace', 'splash2x.ocean_cp', 'splash2x.ocean_ncp', 'splash2x.fmm', 'parsec.swaptions']
     #benchs = ['splash2x.water_nsquared', 'splash2x.water_spatial', 'splash2x.raytrace', 'splash2x.ocean_cp', 'splash2x.ocean_ncp', 'splash2x.fmm', 'parsec.swaptions']
     #benchs = ['parsec.canneal', 'parsec.freqmine']
@@ -606,9 +606,12 @@ class VMM:
             self.vms[0].bench_id = self.run_index
             self.vms[1].bench_id = self.run_index
         elif self.mode == 'tailbench':
-            self.vms[0].num_cores = 1
+            self.vms[0].num_cores = 16
             self.vms[0].begin_core = 0
             self.vms[0].bench_id = self.run_index
+            self.vms[1].num_cores = 16
+            self.vms[1].begin_core = 0
+            self.vms[1].bench_id = self.run_index
         elif self.mode == 'parsec':
             self.vms[0].num_cores = 1
             self.vms[0].begin_core = 0
@@ -1238,7 +1241,7 @@ if __name__ == "__main__":
         vmm = VMM()
 
         #new VMs
-        num_vms = 1
+        num_vms = 3
         for vm_id in range(0, num_vms):
             vm_name = 'centos8_test%d' % vm_id
             vmm.new_vm(vm_id, vm_name)
@@ -1246,16 +1249,14 @@ if __name__ == "__main__":
     if param == 'init':
         for vm_id in range(0, num_vms):
             vm = vmm.vms[vm_id]
-            vm.setvcpus_dyn(1)
-            vm.setmem_dyn(4)
+            vm.shutdown()
+            time.sleep(20)
             vm.setvcpus_sta(VMM.H_CORE)
             vm.setmem_sta(8)
-            vm.shutdown()
-            time.sleep(10)
             vm.start()
             time.sleep(20)
-            vm.setvcpus_dyn(1)
-            vm.setmem_dyn(4)
+            vm.setvcpus_dyn(8)
+            vm.setmem_dyn(8)
     elif param == 'core':
         for vm_id in range(0, num_vms):
             num_cores = 4
@@ -1622,7 +1623,7 @@ if __name__ == "__main__":
         #print(stdout.read())
         #print(stderr.read())
     elif param == 'sync_file':
-        option == sys.argv[2]
+        option = sys.argv[2]
         sync_file(option)
     else:
         print("param error")
