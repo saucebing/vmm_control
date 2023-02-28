@@ -13,13 +13,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import gym
+import random
+import datetime
 
 # Hyper Parameters
 BATCH_SIZE = 5
 LR = 0.02                   # learning rate, origin: 0.01
 EPSILON = 0.9               # greedy policy
 GAMMA = 0.9                 # reward discount
-TARGET_REPLACE_ITER = 200   # target update frequency, origin: 100
+TARGET_REPLACE_ITER = 5   # target update frequency, origin: 100
 MEMORY_CAPACITY = 10 #origin: 2000
 env = gym.make('MyEnv-v1')
 print('env.observation_space:', env.observation_space)
@@ -30,6 +32,8 @@ env = env.unwrapped
 N_ACTIONS = env.action_space.n
 N_STATES = env.observation_space.shape[0]
 ENV_A_SHAPE = 0 if isinstance(env.action_space.sample(), int) else env.action_space.sample().shape     # to confirm the shape
+
+random.seed(1)
 
 class Net(nn.Module):
     def __init__(self, ):
@@ -65,6 +69,11 @@ class DQN(object):
         else:   # random
             action = np.random.randint(0, N_ACTIONS)
             action = action if ENV_A_SHAPE == 0 else action.reshape(ENV_A_SHAPE)
+        return action
+
+    def choose_action_random(self, x):
+        action = np.random.randint(0, N_ACTIONS)
+        action = action if ENV_A_SHAPE == 0 else action.reshape(ENV_A_SHAPE)
         return action
 
     def store_transition(self, s, a, r, s_):

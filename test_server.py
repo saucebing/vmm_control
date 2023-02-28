@@ -247,10 +247,18 @@ def run_tailbench_parallel_pre(tail_id, bench_name, qps, reqs, warmupreqs, n_thr
     print('bench = %s, QPS = %d, REQS = %d, WARMUPREQS = %d' % (bench_name, qps, reqs, warmupreqs))
     beg_time = datetime.now()
     os.chdir('%s' % bench_name)
-    p = exec_cmd('TBENCH_RANDSEED=1 ./myrun.sh %d %d %d %d' % (n_thread, qps, reqs, warmupreqs), tail_id, False)
+    p = exec_cmd('TBENCH_RANDSEED=1 ./myrun.sh %d %d %d %d' % (n_thread, qps, reqs, warmupreqs), tail_id, True)
+    time.sleep(1)
+    res = get_res(tail_id)
+    print(res)
+    (m, s) = find_str2('real(.*)m(.*)s', res)
+    print('Running time: %sm %ss' % (m, s))
+    m = m.strip()
+    s = s.strip()
+    t_total = float(m) * 60 + float(s)
     #print(get_res())
     os.chdir('..')
-    return p
+    return t_total
 
 def run_tailbench_parallel_post(tail_id, bench_name, qps, reqs, warmupreqs, n_thread):
     os.chdir('/root/tars/tailbench-v0.9')
@@ -266,10 +274,9 @@ def run_tailbench_parallel_post(tail_id, bench_name, qps, reqs, warmupreqs, n_th
     return tl
 
 def run_tailbench_parallel(tail_id, bench_name, qps, reqs, warmupreqs, n_thread):
-    p = run_tailbench_parallel_pre(tail_id, bench_name, qps, reqs, warmupreqs, n_thread)
-    p.wait()
+    t_total = run_tailbench_parallel_pre(tail_id, bench_name, qps, reqs, warmupreqs, n_thread)
     tl = run_tailbench_parallel_post(tail_id, bench_name, qps, reqs, warmupreqs, n_thread)
-    return tl
+    return tl, t_total
 
 def decode(data):
     pairs = data.split(',')
@@ -400,9 +407,9 @@ if __name__ == '__main__':
                             qps = int(data['qps'])
                             reqs = int(data['reqs'])
                             warmupreqs = int(data['warmupreqs'])
-                            tl = run_tailbench_parallel(ind, task_name, qps, reqs, warmupreqs, n_cores)
+                            tl, t_total = run_tailbench_parallel(ind, task_name, qps, reqs, warmupreqs, n_cores)
                             ind += 1
-                            serv.send('res:%f' % tl)
+                            serv.send('res:%f,rtime:%f' % (tl, t_total))
                         elif 'splash2x' in task_name or 'parsec' in task_name:
                             limited_time = 0
                             parsec_scale = data['scale']

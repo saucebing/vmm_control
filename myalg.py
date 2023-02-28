@@ -196,6 +196,11 @@ cur_scores = []
 cur_rtime = 0
 cur_part = []
 cur_id = -1
+last_tscore = 0
+last_scores = []
+last_rtime = 0
+last_part = []
+last_id = -1
 res_min = []
 res_max = []
 
@@ -511,8 +516,8 @@ def gen_random_config():
 
     return config
 
-def sample_perf(p, r_ind = -1):
-    global platform, res_min, res_max, base_tscore, base_scores, base_rtime, base_part, base_id, cur_tscore, cur_scores, cur_rtime, cur_part, cur_id, best_tscore, best_scores, best_rtime, best_part, best_id, resources, ress
+def sample_perf(p, i_episode, i_step, r_ind = -1, share_mode = False):
+    global platform, res_min, res_max, base_tscore, base_scores, base_rtime, base_part, base_id, cur_tscore, cur_scores, cur_rtime, cur_part, cur_id, last_tscore, last_scores, last_rtime, last_part, last_id, best_tscore, best_scores, best_rtime, best_part, best_id, resources, ress
 
     resources = []
     for rid in range(NUM_RESOURCES):
@@ -579,8 +584,16 @@ def sample_perf(p, r_ind = -1):
         #sp.check_output(shlex.split(cos_cat_set2), stderr=FNULL)
         #sp.check_output(shlex.split(cos_mBG_set1), stderr=FNULL)
         #sp.check_output(shlex.split(cos_mBG_set2), stderr=FNULL)
-        exec_cmd(taskset_cmnd)
-        print(get_res())
+        if share_mode:
+            #hard code
+            taskset_cmnd = TASKSET + "0-19 " + APP_PIDS[j]
+            exec_cmd(taskset_cmnd)
+            print(get_res())
+            #taskset_cmnd = 'renice -n %d -p %s' % (10 - resources[0][j], APP_PIDS[j])
+            taskset_cmnd = 'renice -n %d -p %s' % (0, APP_PIDS[j])
+        else:
+            exec_cmd(taskset_cmnd)
+            print(get_res())
         exec_cmd(cos_cat_set1)
         print(get_res())
         exec_cmd(cos_cat_set2)
@@ -660,8 +673,15 @@ def sample_perf(p, r_ind = -1):
     print('%sResults:%s' % (color.beg7, color.end))
     if r_ind >= 4:
         for res_id in range(len(ress)):
+            if i_step > 0:
+                last_tscore = cur_tscore
+
             cur_tscore, cur_scores, cur_rtime, cur_id = mapx(ress[res_id], res_id)
             cur_part = resourcess[res_id]
+
+            if i_step == 0:
+                last_tscore = cur_tscore
+
             if cur_tscore > best_tscore:
                 best_tscore = cur_tscore
                 best_scores = cur_scores
@@ -821,9 +841,13 @@ def dqn_optimization_engine(x0, alpha=1e-5):
     global base_tscore, cur_tscore
     # Sample initial configurations
     for (t_ind, params) in enumerate(x0):
+        start_time = time.time()
         print("=================== %sInitail configurations %03d/%03d%s ===================" % (color.beg1, t_ind, len(x0), color.end))
-        q, y = sample_perf(params, t_ind)
+        q, y = sample_perf(params, 0, 0, t_ind, share_mode = False)
         print('q, y = ', q, y)
+        end_time = time.time()  # 获取当前时间
+        durn = end_time - start_time
+        print('%sElapsed Time: %.2f%s' % (color.beg1, durn, color.end))
 
     p = x0[3]
     print('first_state:', p)
@@ -831,38 +855,45 @@ def dqn_optimization_engine(x0, alpha=1e-5):
 
     print('\nCollecting experience...')
     #for i_episode in range(400):
-    total_episode = 10
-    total_ind = 100
+    total_episode = 20
+    total_step = 50
     break_flag = False
     for i_episode in range(total_episode):
-    #    s = env.reset()
-        s = param_to_state(p)
+        print('p = ', p)
+        s = env.reset()
+        #s = param_to_state(p)
         env.state = s
         print('s=', s)
         ep_r = 0
     #    ind = 0
     #    while True:
-        for ind in range(0, total_ind):
-            r_ind = i_episode * total_ind + ind + 4
-            print("=================== %sDQN Iteration (%03d, %03d)/(%03d, %03d)%s ===================" % (color.beg1, i_episode, ind, total_episode, total_ind, color.end))
+        for i_step in range(0, total_step):
+            start_time = time.time()
+
+            r_ind = i_episode * total_step + i_step + 4
+            print("=================== %sDQN Iteration (%03d, %03d)/(%03d, %03d)%s ===================" % (color.beg1, i_episode, i_step, total_episode, total_step, color.end))
     #        #env.render(mode = 'rgb_array')
             a = dqn.choose_action(s)
             print("a=", a)
-            print("ind=", ind)
-    #        ind += 1
-    #        print("a=", a)
 
     #        # take action
-            s_, r, done, info = env.step2(a)
+            s_, r, done, took_action = env.step2(a)
+            while not took_action:
+                time.sleep(3)
+                a = dqn.choose_action_random(s)
+                print("a=", a)
+                print("cbw hello 1")
+                s_, r, done, took_action = env.step2(a)
+        
             print('s_ = ', s_)
-            p = state_to_param(s_)
-            q, y = sample_perf(p, r_ind)
+            p2 = state_to_param(s_)
+            q, y = sample_perf(p2, i_episode, i_step, r_ind, share_mode = False)
             print('q, y = ', q, y)
             #r = stats.mstats.gmean(q) #rewrite reward
-            r = (cur_tscore - base_tscore) * 0.01 / (NUM_APPS - 1) # range is 100 to 300, so just be divided by 200
+            r = (cur_tscore - last_tscore) * 0.01 / (NUM_APPS - 1) # range is 100 to 300, so just be divided by 200
             print("%s--------------------------------------------BEG-----------------------------------------------%s" % (color.beg2, color.end))
             print("CurScore: %.2f" % cur_tscore)
-            print("BaseScore: %.2f" % base_tscore)
+            print("LastScore: %.2f" % last_tscore)
             print('reward = ', r)
             print("%s--------------------------------------------END-----------------------------------------------%s" % (color.beg2, color.end))
 
@@ -872,7 +903,6 @@ def dqn_optimization_engine(x0, alpha=1e-5):
             print("s=", s)
             print("r=", r)
             print("done=", done)
-            print("info=", info)
 
             if done:
                 break_flag = True
@@ -883,7 +913,10 @@ def dqn_optimization_engine(x0, alpha=1e-5):
             #r2 = (env.theta_threshold_radians - abs(theta)) / env.theta_threshold_radians - 0.5
             #r = r1 + r2
 
-            dqn.store_transition(s, a, r, s_)
+            if i_step > 0:
+                dqn.store_transition(s, a, r, s_)
+            print('memory is:')
+            print(dqn.memory)
 
             ep_r += r
             if dqn.memory_counter > MEMORY_CAPACITY:
@@ -893,6 +926,10 @@ def dqn_optimization_engine(x0, alpha=1e-5):
                           '| Ep_r: ', round(ep_r, 2))
 
             s = s_
+
+            end_time = time.time()
+            durn = end_time - start_time #两个时间差，并以秒显示出来
+            print('%sElapsed Time: %.2f%s' % (color.beg1, durn, color.end))
 
         if break_flag:
             break
@@ -1064,7 +1101,30 @@ def main():
     print(st0)
     print(st1)
 
-if __name__ == '__main__':
+def run_single():
 
-    # Invoke the main function
-    main()
+    # Switch on the performance counters
+    os.system(WR_MSR_COMM + IA32_PERF_GBL_CTR + " 0x70000000F")
+    os.system(WR_MSR_COMM + IA32_PERF_FX_CTRL + " 0xFFF")
+
+    #init_configs =  [[8, 1, 9, 1, 8, 1], [1, 8, 1, 9, 1, 8], [1, 1, 1, 1, 1, 1], [3, 3, 3, 3, 3, 3]]
+    x0 = [[4, 1, 1, 7, 3, 6]]
+    print('init_configs = ', x0)
+    # Sample initial configurations
+    for (t_ind, params) in enumerate(x0):
+        start_time = time.time()
+        print("=================== %sInitail configurations %03d/%03d%s ===================" % (color.beg1, t_ind, len(x0), color.end))
+        q, y = sample_perf(params, 0, 0, t_ind, share_mode = False)
+        print('q, y = ', q, y)
+        end_time = time.time()  # 获取当前时间
+        durn = end_time - start_time
+        print('%sElapsed Time: %.2f%s' % (color.beg1, durn, color.end))
+
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        # Invoke the main function
+        main()
+    else:
+        option = sys.argv[1]
+        if option == 'single':
+            run_single()

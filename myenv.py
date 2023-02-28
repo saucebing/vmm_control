@@ -132,26 +132,28 @@ class MyEnv(gym.Env):
             dst_app += 1
         src_ind = res_id * self.N_APP + src_app
         dst_ind = res_id * self.N_APP + dst_app
+        took_action = False
         if self.state[src_ind] > 1:
             self.state[src_ind] -= 1
             self.state[dst_ind] += 1
+            took_action = True
 
-        rwd = 0.0
-        for res_id in range(0, self.N_RESOURCE):
-            avg = 0.0
-            for app_id in range(0, self.N_APP):
-                ind = res_id * self.N_APP + app_id
-                avg += self.state[ind]
-            avg /= self.N_APP
-            for app_id in range(0, self.N_APP):
-                ind = res_id * self.N_APP + app_id
+        #rwd = 0.0
+        #for res_id in range(0, self.N_RESOURCE):
+        #    avg = 0.0
+        #    for app_id in range(0, self.N_APP):
+        #        ind = res_id * self.N_APP + app_id
+        #        avg += self.state[ind]
+        #    avg /= self.N_APP
+        #    for app_id in range(0, self.N_APP):
+        #        ind = res_id * self.N_APP + app_id
                 #rwd += (self.state[ind] - avg) ** 2
         #rwd = -rwd
 
         done = False
         #if rwd > -15:
         #    done = True
-        return np.array(self.state, dtype=np.float32), rwd, done, {}
+        return np.array(self.state, dtype=np.float32), rwd, done, took_action
 
     def step(self, action):
         err_msg = "%r (%s) invalid" % (action, type(action))
@@ -171,28 +173,33 @@ class MyEnv(gym.Env):
             self.state[src_ind] -= 1
             self.state[dst_ind] += 1
 
-        rwd = 0.0
-        for res_id in range(0, self.N_RESOURCE):
-            avg = 0.0
-            for app_id in range(0, self.N_APP):
-                ind = res_id * self.N_APP + app_id
-                avg += self.state[ind]
-            avg /= self.N_APP
-            for app_id in range(0, self.N_APP):
-                ind = res_id * self.N_APP + app_id
-                rwd += (self.state[ind] - avg) ** 2
-        rwd = -rwd
+        #rwd = 0.0
+        #for res_id in range(0, self.N_RESOURCE):
+        #    avg = 0.0
+        #    for app_id in range(0, self.N_APP):
+        #        ind = res_id * self.N_APP + app_id
+        #        avg += self.state[ind]
+        #    avg /= self.N_APP
+        #    for app_id in range(0, self.N_APP):
+        #        ind = res_id * self.N_APP + app_id
+        #        rwd += (self.state[ind] - avg) ** 2
+        #rwd = -rwd
 
         done = False
-        if rwd > -15:
-            done = True
+        #if rwd > -15:
+        #    done = True
         return np.array(self.state, dtype=np.float32), rwd, done, {}
 
     def reset(self):
         #self.state = self.np_random.uniform(low=-0.05, high=0.05, size=(4,))
-        self.state = self.np_random.uniform(low=-10, high=10, size=(self.N_RESOURCE * self.N_APP,))
-        self.steps_beyond_done = None
-        return np.array(self.state, dtype=np.float32)
+        #self.state = self.np_random.uniform(low=-10, high=10, size=(self.N_RESOURCE * self.N_APP,))
+        #self.steps_beyond_done = None
+        #return np.array(self.state, dtype=np.float32)
+        n_units = [10, 11, 10]
+        for ind_res in range(0, self.N_RESOURCE - 1):
+            for ind_app in range(0, self.N_APP):
+                self.state[ind_res][ind_app] = random.randint(1, n_units[ind_res] - (self.N_APP - (ind_app + 1)))
+                n_units[ind_res] -= self.state[ind_res][ind_app]
 
     def render(self, mode="human"):
         screen_width = 600

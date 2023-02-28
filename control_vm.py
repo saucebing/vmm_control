@@ -295,12 +295,15 @@ class VMM:
     #benchs = ['memcached']
     benchs = ['img-dnn', 'masstree', 'moses', 'silo', 'specjbb', 'xapian']
     #begin_qps, end_qps, interval_qps, reqs, warmupreqs
-    ranges = [[250, 5000, 250, 10000, 5000], [1000, 15000, 1000, 3000, 14000], [5, 100, 5, 500, 500], [1000, 15000, 1000, 20000, 20000], [1000, 19000, 1000, 25000, 25000], [100, 1500, 100, 3000, 1000]]
+    #ranges = [[250, 5000, 250, 10000, 5000], [1000, 15000, 1000, 3000, 14000], [5, 100, 5, 500, 500], [1000, 15000, 1000, 20000, 20000], [1000, 19000, 1000, 25000, 25000], [100, 1500, 100, 3000, 1000]]
+    ranges = [[250, 5000, 250, 5000, 2500], [1000, 15000, 1000, 750, 3500], [5, 100, 5, 500, 500], [1000, 15000, 1000, 20000, 20000], [1000, 19000, 1000, 25000, 25000], [100, 1500, 100, 3000, 1000]]
 
     #for clite and myalg
-    max_qps = [1500, 6000, 0, 17000, 600] #three guests
+    #max_qps = [1500, 6000, 0, 17000, 600] #three guests
+    max_qps = [1500, 4000, 0, 17000, 600] #three guests
     standards = [1917.28, 719.39, 0, 130.55, 2061.68] #thress guests
     #perc_qps = [1.0, 1.0, 1.0, 1.0, 1.0]
+    #perc_qps = [0.5, 0.5, 0.5, 0.5, 0.5]
     perc_qps = [0.5, 0.5, 0.5, 0.5, 0.5]
     #benchs = ['splash2x.water_nsquared', 'splash2x.water_spatial', 'splash2x.raytrace', 'splash2x.ocean_cp', 'splash2x.ocean_ncp', 'splash2x.fmm', 'parsec.swaptions']
     #benchs = ['splash2x.water_nsquared', 'splash2x.water_spatial', 'splash2x.raytrace', 'splash2x.ocean_cp', 'splash2x.ocean_ncp', 'splash2x.fmm', 'parsec.swaptions']
@@ -810,7 +813,7 @@ class VMM:
                 break
 
     def preprocess_single(self, vm_id, task_name = None):
-        time.sleep(1)
+        #time.sleep(1)
         vm = self.vms[vm_id]
         self.bench_id = vm.bench_id
         if self.metric_set_mode:
@@ -829,7 +832,7 @@ class VMM:
             else:
                 vm.client.send('tasks:0,num_cores:%d,task_name:%s,scale:native,threads:%d,times:%d' % (vm.num_cores, self.benchs[self.bench_id], 16, 1))
 
-        time.sleep(1)
+        #time.sleep(1)
         if vm_id == 0:
             self.record = [None] * self.num_vms
         num_sample = 1
