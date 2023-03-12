@@ -9,6 +9,8 @@ import gym
 from gym import spaces, logger
 from gym.utils import seeding
 import numpy as np
+import copy
+import random
 
 
 class MyEnv(gym.Env):
@@ -122,23 +124,42 @@ class MyEnv(gym.Env):
         err_msg = "%r (%s) invalid" % (action, type(action))
         assert self.action_space.contains(action), err_msg
 
-        x = self.state
+        x = copy.deepcopy(self.state)
         reward = 0.0
         res_id = int(action / (self.N_APP * (self.N_APP - 1)))
         src_app = int(action % (self.N_APP * (self.N_APP - 1)) / (self.N_APP - 1))
         dst_app = action % (self.N_APP - 1)
         print('res_id = %d, src_app = %d, dst_app = %d' % (res_id, src_app, dst_app))
+        took_action = False
         if dst_app >= src_app:
             dst_app += 1
         src_ind = res_id * self.N_APP + src_app
         dst_ind = res_id * self.N_APP + dst_app
-        took_action = False
-        if self.state[src_ind] > 1:
-            self.state[src_ind] -= 1
-            self.state[dst_ind] += 1
-            took_action = True
 
-        #rwd = 0.0
+        if x[src_ind] > 1:
+            x[src_ind] -= 1
+            x[dst_ind] += 1
+            took_action = True
+        #share mode
+        #if res_id > 0:
+        #    if dst_app >= src_app:
+        #        dst_app += 1
+        #    src_ind = res_id * self.N_APP + src_app
+        #    dst_ind = res_id * self.N_APP + dst_app
+
+        #    if x[src_ind] > 1:
+        #        x[src_ind] -= 1
+        #        x[dst_ind] += 1
+        #        took_action = True
+        #else:
+        #    src_ind = res_id * self.N_APP + src_app
+        #    if dst_app == 0 and x[src_ind] > 1:
+        #        x[src_ind] -= 1
+        #        took_action = True
+        #    elif dst_app == 1 and x[src_ind] < 9:
+        #        x[src_ind] += 1
+        #        took_action = True
+        rwd = 0.0
         #for res_id in range(0, self.N_RESOURCE):
         #    avg = 0.0
         #    for app_id in range(0, self.N_APP):
@@ -150,10 +171,12 @@ class MyEnv(gym.Env):
                 #rwd += (self.state[ind] - avg) ** 2
         #rwd = -rwd
 
+        if took_action:
+            self.state = np.array(x, dtype=np.float32)
         done = False
         #if rwd > -15:
         #    done = True
-        return np.array(self.state, dtype=np.float32), rwd, done, took_action
+        return self.state, rwd, done, took_action
 
     def step(self, action):
         err_msg = "%r (%s) invalid" % (action, type(action))
@@ -173,21 +196,21 @@ class MyEnv(gym.Env):
             self.state[src_ind] -= 1
             self.state[dst_ind] += 1
 
-        #rwd = 0.0
-        #for res_id in range(0, self.N_RESOURCE):
-        #    avg = 0.0
-        #    for app_id in range(0, self.N_APP):
-        #        ind = res_id * self.N_APP + app_id
-        #        avg += self.state[ind]
-        #    avg /= self.N_APP
-        #    for app_id in range(0, self.N_APP):
-        #        ind = res_id * self.N_APP + app_id
-        #        rwd += (self.state[ind] - avg) ** 2
-        #rwd = -rwd
+        rwd = 0.0
+        for res_id in range(0, self.N_RESOURCE):
+            avg = 0.0
+            for app_id in range(0, self.N_APP):
+                ind = res_id * self.N_APP + app_id
+                avg += self.state[ind]
+            avg /= self.N_APP
+            for app_id in range(0, self.N_APP):
+                ind = res_id * self.N_APP + app_id
+                rwd += (self.state[ind] - avg) ** 2
+        rwd = -rwd
 
         done = False
-        #if rwd > -15:
-        #    done = True
+        if rwd > -15:
+            done = True
         return np.array(self.state, dtype=np.float32), rwd, done, {}
 
     def reset(self):
@@ -195,11 +218,18 @@ class MyEnv(gym.Env):
         #self.state = self.np_random.uniform(low=-10, high=10, size=(self.N_RESOURCE * self.N_APP,))
         #self.steps_beyond_done = None
         #return np.array(self.state, dtype=np.float32)
+        x = [0] * self.N_RESOURCE * self.N_APP
         n_units = [10, 11, 10]
-        for ind_res in range(0, self.N_RESOURCE - 1):
-            for ind_app in range(0, self.N_APP):
-                self.state[ind_res][ind_app] = random.randint(1, n_units[ind_res] - (self.N_APP - (ind_app + 1)))
-                n_units[ind_res] -= self.state[ind_res][ind_app]
+        for ind_res in range(0, self.N_RESOURCE):
+            for ind_app in range(0, self.N_APP - 1):
+                x[ind_res * self.N_APP + ind_app] = random.randint(1, n_units[ind_res] - (self.N_APP - (ind_app + 1)))
+                n_units[ind_res] -= x[ind_res * self.N_APP + ind_app]
+            x[ind_res * self.N_APP + self.N_APP - 1] = n_units[ind_res]
+        #ind_res = 0
+        #for ind_app in range(0, self.N_APP):
+        #    x[ind_app] = random.randint(1, 9)
+        self.state = x
+        return self.state
 
     def render(self, mode="human"):
         screen_width = 600

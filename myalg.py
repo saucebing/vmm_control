@@ -108,11 +108,11 @@ CONFIGS_MEMBW = ["10", "20", "30", "40", "50", "60", "70", "80", "90", "100"]
 
 # Commands to set hardware allocations
 TASKSET       = "taskset -acp "
-COS_CAT_SET1  = "pqos-msr -e \"llc:%s=%s\""
-COS_CAT_SET2  = "pqos-msr -a \"llc:%s=%s\""
-COS_MBG_SET1  = "pqos-msr -e \"mba:%s=%s\""
-COS_MBG_SET2  = "pqos-msr -a \"core:%s=%s\""
-COS_RESET     = "pqos-msr -R"
+COS_CAT_SET1  = "pqos -e \"llc:%s=%s\""
+COS_CAT_SET2  = "pqos -a \"llc:%s=%s\""
+COS_MBG_SET1  = "pqos -e \"mba:%s=%s\""
+COS_MBG_SET2  = "pqos -a \"core:%s=%s\""
+COS_RESET     = "pqos -R"
 
 # Commands to get MSRs
 WR_MSR_COMM       = "wrmsr -a "
@@ -1040,6 +1040,7 @@ def standard_test():
         taskset_cmnd = TASKSET + "0-9,10-19 " + str(pid) #numa
         exec_cmd(taskset_cmnd)
     exec_cmd("pqos -R")
+    exec_cmd("pqos -r")
 
     print("=================== standard test begin ===================")
     (p1, pid) = runLCBenchPre('guest', 0, 0)
